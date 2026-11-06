@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gtfound"
+version = "0.1.0"
+description = "GTFound haplotype imputation inference tool"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md", "third_party/ESM_LICENSE"]
+authors = [{name = "Wang Qiyu"}]
+dependencies = ["torch>=2.0", "safetensors>=0.4", "numpy>=1.23", "pysam>=0.21"]
+keywords = ["genomics", "haplotype", "genotype-imputation", "pytorch"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+
+[project.optional-dependencies]
+download = ["huggingface_hub>=0.23"]
+dev = ["pytest>=7", "build>=1", "wheel"]
+
+[project.scripts]
+gtfound = "gtfound.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["gtfound*"]
+
+[tool.setuptools]
+include-package-data = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

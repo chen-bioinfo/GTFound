@@ -1,0 +1,41 @@
+*.ckpt
+__pycache__/
+*.egg-info/
+build/
+dist/
+
+# Model weights are distributed separately on Hugging Face.
+*.safetensors
+model_weights/
+
+# Generated tensors, genomic data, and inference outputs.
+*.pt
+*.pth
+*.vcf
+*.vcf.gz
+*.vcf.gz.tbi
+*.vcf.gz.csi
+*.bcf
+*.bcf.csi
+*.bed
+*.bim
+*.fam
+*.ld
+*.ld.gz
+*.log
+outputs/
+work_*/
+
+# Local environments, caches, and credentials.
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.cache/
+.coverage
+htmlcov/
+.env
+.env.*
+.DS_Store
+.idea/
+.vscode/

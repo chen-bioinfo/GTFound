@@ -1,0 +1,13 @@
+{
+  "model_type": "gtfound",
+  "architecture": "GTFoundModel",
+  "vocab_size": 6,
+  "embed_dim": 768,
+  "num_attention_heads": 12,
+  "num_layers": 12,
+  "max_seqlen": 1024,
+  "dropout": 0.1,
+  "position_embedding": "sinusoidal of genomic position",
+  "input_representation": "biallelic panel haplotype 0/1",
+  "license": "MIT"
+}
