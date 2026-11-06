@@ -7,15 +7,12 @@ import numpy as np
 import time
 from typing import Optional, Tuple
 
-# from BertEmbedding import BertEmbeddings
 
 def rotate_half(x):
     # rearrange doesn't work with torch.jit
-    # x = rearrange(x, '... (d r) -> ... d r', r=2)
     x = x.unflatten(dim=-1, sizes=(-1, 2))
     x1, x2 = x.unbind(dim=-1)
     rotated_x = torch.stack((-x2, x1), dim=-1)
-    # return rearrange(rotated_x, '... d r -> ... (d r)')
     return rotated_x.flatten(start_dim=-2)
 
 
@@ -34,7 +31,7 @@ class RotaryEmbedding(nn.Module):
     The rotary position embeddings from RoFormer_ (Su et. al).
     A crucial insight from the method is that the query and keys are
     transformed by rotation matrices which depend on the relative positions.
-    Other implementations are available in the Rotary Transformer repo_ and in 
+    Other implementations are available in the Rotary Transformer repo_ and in
     GPT-NeoX_, GPT-NeoX was an inspiration
     .. _RoFormer: https://arxiv.org/abs/2104.09864
     .. _repo: https://github.com/ZhuiyiTechnology/roformer
@@ -89,7 +86,6 @@ class RotaryEmbedding(nn.Module):
                 x.shape[seq_dimension], device=x.device, dtype=self.inv_freq.dtype
             )
             # Don't do einsum, it converts fp32 to fp16
-            # freqs = torch.einsum("i,j->ij", t, self.inv_freq)
             freqs = torch.outer(t, self.inv_freq)
             self._cos_cached = torch.cos(freqs).to(x.dtype)
             self._sin_cached = torch.sin(freqs).to(x.dtype)
@@ -148,13 +144,12 @@ class MyTransformer(nn.Module):
         super(MyTransformer, self).__init__()
 
 
-
-        #  ================ 编码部分 =====================
+        # Encoder
         encoder_layer = MyTransformerEncoderLayer(d_model, nhead, dim_feedforward, dropout)
         encoder_norm = nn.LayerNorm(d_model)
         self.encoder = MyTransformerEncoder(encoder_layer, num_encoder_layers, encoder_norm)
 
-        # ================ 解码部分 =====================
+        # Decoder
         decoder_layer = MyTransformerDecoderLayer(d_model, nhead, dim_feedforward, dropout)
         decoder_norm = nn.LayerNorm(d_model)
         self.decoder = MyTransformerDecoder(decoder_layer, num_decoder_layers, decoder_norm)
@@ -185,7 +180,6 @@ class MyTransformer(nn.Module):
         :param memory_key_padding_mask:  [batch_size, src_len]
         :return: [tgt_len, batch_size, num_heads * kdim] <==> [tgt_len,batch_size,embed_dim]
         """
-        # print("memory_key_padding_mask",memory_key_padding_mask.shape)
         memory, attn_weight = self.encoder(src, mask=src_mask, src_key_padding_mask=src_key_padding_mask)
         # [src_len, batch_size, num_heads * kdim] <==> [src_len,batch_size,embed_dim]
         output = self.decoder(tgt=tgt, memory=memory, tgt_mask=tgt_mask, memory_mask=memory_mask,
@@ -222,12 +216,11 @@ class MyTransformerEncoderLayer(nn.Module):
 
     def forward(self, src, src_mask=None, src_key_padding_mask=None):
 
-        # src2 = self.self_attn(src, src, src, attn_mask=src_mask,
-        #                       key_padding_mask=src_key_padding_mask, )[0]  # 计算多头注意力
+
         src2, attn_weight = self.self_attn(src, src, src, attn_mask=src_mask,
-                              key_padding_mask=src_key_padding_mask, )[0]  # 计算多头注意力
+                              key_padding_mask=src_key_padding_mask, )[0]  # Compute multi-head attention.
         # src2: [src_len,batch_size,num_heads*kdim] num_heads*kdim = embed_dim
-        src = src + self.dropout1(src2)  # 残差连接
+        src = src + self.dropout1(src2)  # Residual connection.
         src = self.norm1(src)  # [src_len,batch_size,num_heads*kdim]
 
         src2 = self.activation(self.linear1(src))  # [src_len,batch_size,dim_feedforward]
@@ -241,7 +234,7 @@ class MyTransformerEncoder(nn.Module):
     def __init__(self, encoder_layer, num_layers, norm=None):
         super(MyTransformerEncoder, self).__init__()
 
-        self.layers = _get_clones(encoder_layer, num_layers)  # 克隆得到多个encoder layers 论文中默认为6
+        self.layers = _get_clones(encoder_layer, num_layers)  # Clone the encoder layer to construct the stack.
         self.num_layers = num_layers
         self.norm = norm
 
@@ -250,7 +243,7 @@ class MyTransformerEncoder(nn.Module):
         output = src
         for mod in self.layers:
             output = mod(output, src_mask=mask,
-                         src_key_padding_mask=src_key_padding_mask)  # 多个encoder layers层堆叠后的前向传播过程
+                         src_key_padding_mask=src_key_padding_mask)  # Apply the stacked encoder layers.
         if self.norm is not None:
             output = self.norm(output)
         return output  # [src_len, batch_size, num_heads * kdim] <==> [src_len,batch_size,embed_dim]
@@ -290,7 +283,7 @@ class MyTransformerDecoderLayer(nn.Module):
                               attn_mask=tgt_mask,
                               key_padding_mask=tgt_key_padding_mask)[0]
 
-        tgt = tgt + self.dropout1(tgt2)  
+        tgt = tgt + self.dropout1(tgt2)
         tgt = self.norm1(tgt)  # [tgt_len,batch_size, embed_dim]
 
         tgt2 = self.multihead_attn(tgt, memory, memory,  # [tgt_len, batch_size, embed_dim]
@@ -298,7 +291,7 @@ class MyTransformerDecoderLayer(nn.Module):
                                    key_padding_mask=memory_key_padding_mask)[0]
 
 
-        tgt = tgt + self.dropout2(tgt2)  # 残差连接
+        tgt = tgt + self.dropout2(tgt2)  # Residual connection.
         tgt = self.norm2(tgt)  # [tgt_len, batch_size, embed_dim]
 
         tgt2 = self.activation(self.linear1(tgt))  # [tgt_len, batch_size, dim_feedforward]
@@ -320,8 +313,7 @@ class MyTransformerDecoder(nn.Module):
                 memory_key_padding_mask=None):
 
         output = tgt  # [tgt_len,batch_size, embed_dim]
-        # print("memory_key_padding_mask",memory_key_padding_mask.shape)
-        for mod in self.layers:  # 这里的layers就是N层解码层堆叠起来的
+        for mod in self.layers:  # Iterate through the decoder stack.
             output = mod(output, memory,
                          tgt_mask=tgt_mask,
                          memory_mask=memory_mask,
@@ -339,14 +331,12 @@ class MyMultiheadAttention(nn.Module):
     def __init__(self, embed_dim, num_heads, dropout=0., bias=True):
         super(MyMultiheadAttention, self).__init__()
 
-        self.embed_dim = embed_dim  
-        self.head_dim = embed_dim // num_heads  
+        self.embed_dim = embed_dim
+        self.head_dim = embed_dim // num_heads
         self.kdim = self.head_dim
         self.vdim = self.head_dim
-        self.num_heads = num_heads  
+        self.num_heads = num_heads
         self.dropout = dropout
-
-
 
 
         self.q_proj = nn.Linear(embed_dim, embed_dim, bias=bias)  # embed_dim = kdim * num_heads
@@ -355,25 +345,8 @@ class MyMultiheadAttention(nn.Module):
         self.out_proj = nn.Linear(embed_dim, embed_dim, bias=bias)
 
 
-
-
-        # self.conv = nn.Conv2d(1, num_heads, kernel_size=3, padding=1)  # 3x3卷积核，输出16通道
-        # self.relu = nn.ReLU() 
-
         self.conv = nn.Conv2d(1, num_heads, kernel_size=3, padding=1)
         self.relu = nn.ReLU()
-
-        # self.layernorm = nn.LayerNorm(normalized_shape=[1024,1024*num_heads])
-        # self.conv2 = nn.Conv2d(num_heads, num_heads, kernel_size=3, padding=1)
-        # self.relu2 = nn.ReLU()
-        
-        # self.shortcut = None
-        # if 1 != num_heads :
-        #     self.shortcut = nn.Conv2d(1, num_heads, kernel_size=1, stride=1, bias=False)
-
-        # self.ld_proj = nn.Linear(1024,1024*num_heads,bias=bias)
-
-
 
 
     def forward(self, query, key, value, attn_mask=None, key_padding_mask=None,ld_matrices=None):
@@ -390,10 +363,6 @@ class MyMultiheadAttention(nn.Module):
                                             conv = self.conv,
                                             ld_matrices=ld_matrices,
                                             relu= self.relu,
-                                            # rotary_embedding = self.rotaty_embedding
-                                            # conv2 = self.conv2,
-                                            # relu2 = self.relu2,
-                                            # shortcut = self.shortcut)
         )
 
 def multi_head_attention_forward(query,  # [tgt_len,batch_size, embed_dim]
@@ -409,15 +378,11 @@ def multi_head_attention_forward(query,  # [tgt_len,batch_size, embed_dim]
                                  k_proj=None,  # weight: [embed_dim,kdim * num_heads]  , bias: [embed_dim]
                                  v_proj=None,  # weight: [embed_dim,kdim * num_heads]  , bias: [embed_dim]
                                  attn_mask=None,  # [tgt_len,src_len] or [num_heads*batch_size,tgt_len, src_len]
-                                 conv=None,#更改ld_matrix
+                                 conv=None,# Optional convolution over the LD matrix.
                                  ld_matrices=None,
                                  relu=None,
                                  rotary_embedding = None):
-                                #  conv2=None,
-                                #  relu2=None,
-                                #  shortcut=None,
-                                 
-    # print("shapepppp",query.shape)
+
     q = F.linear(query, q_proj.weight, q_proj.bias)
     #  [tgt_len,batch_size, embed_dim] x [embed_dim,kdim * num_heads] = [tgt_len,batch_size,kdim * num_heads]
 
@@ -426,10 +391,6 @@ def multi_head_attention_forward(query,  # [tgt_len,batch_size, embed_dim]
 
     v = F.linear(value, v_proj.weight, v_proj.bias)
     # [src_len, batch_size, embed_dim] x [embed_dim, vdim * num_heads] = [src_len, batch_size, vdim * num_heads]
-
-
-
-
 
 
     tgt_len, bsz, embed_dim = query.size()  # [tgt_len,batch_size, embed_dim]
@@ -453,8 +414,6 @@ def multi_head_attention_forward(query,  # [tgt_len,batch_size, embed_dim]
     v = v.contiguous().view(-1, bsz * num_heads, head_dim).transpose(0, 1)  # [batch_size * num_heads,src_len,vdim]
 
 
-
-
     attn_output_weights = torch.bmm(q, k.transpose(1, 2))
 
 
@@ -470,15 +429,12 @@ def multi_head_attention_forward(query,  # [tgt_len,batch_size, embed_dim]
                                                     src_len)  # [batch_size * num_heads, tgt_len, src_len]
 
 
-   
-
     attn_output_weights = attn_output_weights.view(bsz,num_heads,src_len,tgt_len)
 
     # with torch.no_grad():
     for i in range(num_heads):
         attn_output_weights[:,i] += ld_matrices
     attn_output_weights = attn_output_weights.view(bsz*num_heads,src_len,tgt_len)
-
 
 
     attn_output_weights = F.softmax(attn_output_weights, dim=-1)  # [batch_size * num_heads, tgt_len, src_len]
@@ -491,6 +447,3 @@ def multi_head_attention_forward(query,  # [tgt_len,batch_size, embed_dim]
     attn_output_weights = attn_output_weights.view(bsz, num_heads, tgt_len, src_len)
     Z = F.linear(attn_output, out_proj_weight, out_proj_bias)
     return Z, attn_output_weights.sum(dim=1) / num_heads  # average attention weights over heads
-
-
-

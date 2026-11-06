@@ -1,0 +1,47 @@
+name: GTFound-Base CI
+
+on:
+  push:
+    paths:
+      - 'GTFound-Base/**'
+      - '.github/workflows/gtfound-base.yml'
+  pull_request:
+    paths:
+      - 'GTFound-Base/**'
+      - '.github/workflows/gtfound-base.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.12']
+    defaults:
+      run:
+        working-directory: GTFound-Base
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: |
+            GTFound-Base/requirements.txt
+            GTFound-Base/requirements-dev.txt
+      - name: Install CPU dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install -r requirements-dev.txt
+      - name: Check public interfaces
+        run: |
+          python model_train.py --help
+          python inference.py --help
+          python -m pytest -q
+      - name: Run synthetic training and inference
+        run: python quick_start.py --output-dir outputs/ci_smoke

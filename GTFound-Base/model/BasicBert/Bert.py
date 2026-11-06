@@ -64,7 +64,6 @@ class BertSelfOutput(nn.Module):
         :param input_tensor: [src_len, batch_size, hidden_size]
         :return: [src_len, batch_size, hidden_size]
         """
-        #modify
         input_tensor = input_tensor.transpose(0,1)
         hidden_states = self.dropout(hidden_states)
         hidden_states = self.LayerNorm(hidden_states + input_tensor)
@@ -149,12 +148,7 @@ class BertLayer(nn.Module):
     def forward(self,
                 hidden_states,
                 attention_mask=None):
-        """
-
-        :param hidden_states: [src_len, batch_size, hidden_size]
-        :param attention_mask: [batch_size, src_len] mask掉padding部分的内容
-        :return: [src_len, batch_size, hidden_size]
-        """
+        'Apply the layer to hidden states; attention masks exclude padding positions.'
         hidden_states =hidden_states.transpose(0,1)
         attention_output, attn_weight = self.bert_attention(hidden_states, attention_mask)
         # [src_len, batch_size, hidden_size]
@@ -183,7 +177,6 @@ class BertEncoder(nn.Module):
         """
         all_encoder_layers = []
         layer_output = hidden_states
-        # attention_mask = attention_mask.transpose(0,1)
         for i, layer_module in enumerate(self.bert_layers):
             layer_output, attn_weight = layer_module(layer_output,
                                         attention_mask)
@@ -262,33 +255,26 @@ class BertModel(nn.Module):
                 attention_mask=None,
                 token_type_ids=None,
                 position_ids=None):
-        """
-
-        :param input_ids:  [batch_size, src_len]
-        :param attention_mask: [batch_size, src_len] mask掉padding部分的内容
-        :param position_ids: [batch_size, 1] # 
-        :return:
-        """
+        'Apply the layer to hidden states; attention masks exclude padding positions.'
         embedding_output = self.bert_embeddings(input_ids=input_ids,
                                                 position_ids=position_ids,
                                                 token_type_ids=token_type_ids)
-        #modify
         embedding_output = embedding_output.transpose(0,1)
         # embedding_output: [src_len, batch_size, hidden_size]
         all_encoder_outputs, attn_weight = self.bert_encoder(embedding_output,
                                                 attention_mask=attention_mask)
-        # all_encoder_outputs 为一个包含有num_hidden_layers个层的输出
-        sequence_output = all_encoder_outputs[-1]  # 取最后一层
+        # Encoder outputs from the configured hidden layers.
+        sequence_output = all_encoder_outputs[-1]  # Select the final layer.
         # sequence_output: [src_len, batch_size, hidden_size]
         pooled_output = self.bert_pooler(sequence_output)
-        # 默认是最后一层的first token 即[cls]位置经dense + tanh 后的结果
+        # Pool final-layer states using the configured pooling strategy.
         # pooled_output: [batch_size, hidden_size]
         return pooled_output, all_encoder_outputs, attn_weight
 
     def _reset_parameters(self):
         r"""Initiate parameters in the transformer model."""
         """
-        初始化
+        Initialize model parameters.
         """
         for p in self.parameters():
             if p.dim() > 1:
@@ -296,10 +282,10 @@ class BertModel(nn.Module):
 
     @classmethod
     def from_pretrained(cls, config, pretrained_model_dir=None):
-        model = cls(config)  # 初始化模型，cls为未实例化的对象，即一个未实例化的BertModel对象
+        model = cls(config)  # Instantiate the model before loading weights.
         pretrained_model_path = os.path.join(pretrained_model_dir, "pytorch_model.bin")
         if not os.path.exists(pretrained_model_path):
-            raise ValueError(f"<路径：{pretrained_model_path} 中的模型不存在，请仔细检查！>")
+            raise ValueError(f"Model file not found: {pretrained_model_path}; check the pretrained model directory.")
         loaded_paras = torch.load(pretrained_model_path)
         state_dict = deepcopy(model.state_dict())
         loaded_paras_names = list(loaded_paras.keys())[:-8]
@@ -307,9 +293,9 @@ class BertModel(nn.Module):
         if 'use_torch_multi_head' in config.__dict__ and config.use_torch_multi_head:
             torch_paras = format_paras_for_torch(loaded_paras_names, loaded_paras)
             for i in range(len(model_paras_names)):
-                logging.debug(f"## 成功赋值参数:{model_paras_names[i]},形状为: {torch_paras[i].size()}")
+                logging.debug(f"Loaded parameter: {model_paras_names[i]},shape: {torch_paras[i].size()}")
                 if "position_embeddings" in model_paras_names[i]:
-                    # 这部分代码用来消除预训练模型只能输入小于512个字符的限制
+                    # Extend position embeddings beyond the pretrained 512-position limit.
                     if config.max_position_embeddings > 512:
                         new_embedding = replace_512_position(state_dict[model_paras_names[i]],
                                                              loaded_paras[loaded_paras_names[i]],
@@ -317,13 +303,13 @@ class BertModel(nn.Module):
                         state_dict[model_paras_names[i]] = new_embedding
                         continue
                 state_dict[model_paras_names[i]] = torch_paras[i]
-            logging.info(f"## 注意，正在使用torch框架中的MultiHeadAttention实现")
+            logging.info(f"Using PyTorch MultiheadAttention")
         else:
             for i in range(len(loaded_paras_names)):
-                logging.debug(f"## 成功将参数:{loaded_paras_names[i]}赋值给{model_paras_names[i]},"
-                              f"参数形状为:{state_dict[model_paras_names[i]].size()}")
+                logging.debug(f"Loaded parameter: {loaded_paras_names[i]} into {model_paras_names[i]},"
+                              f"parameter shape: {state_dict[model_paras_names[i]].size()}")
                 if "position_embeddings" in model_paras_names[i]:
-                    # 这部分代码用来消除预训练模型只能输入小于512个字符的限制
+                    # Extend position embeddings beyond the pretrained 512-position limit.
                     if config.max_position_embeddings > 512:
                         new_embedding = replace_512_position(state_dict[model_paras_names[i]],
                                                              loaded_paras[loaded_paras_names[i]],
@@ -331,6 +317,6 @@ class BertModel(nn.Module):
                         state_dict[model_paras_names[i]] = new_embedding
                         continue
                 state_dict[model_paras_names[i]] = loaded_paras[loaded_paras_names[i]]
-            logging.info(f"## 注意，正在使用本地MyTransformer中的MyMultiHeadAttention实现")
+            logging.info(f"Using the local multi-head attention implementation")
         model.load_state_dict(state_dict)
         return model

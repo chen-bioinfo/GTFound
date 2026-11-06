@@ -34,7 +34,7 @@ class FLASHAttention(nn.Module):
 
         for p in self.parameters():
             normal_(p, mean=0.0, std=0.02)
-    
+
     def _global_linear_attn(self, q, k, v):
         """
         q, k:   [b, G, C, s]
@@ -50,7 +50,6 @@ class FLASHAttention(nn.Module):
         """
         qk = torch.einsum("bgns,bgms->bgnm", [q, k])
         a = torch.relu(qk + self.bias) ** 2
-        # a = torch.relu(qk) ** 2
         return torch.einsum("bgnm,bgme->bgne", [a, v])
 
     def attn(self, x, v):
@@ -82,5 +81,4 @@ class FLASHAttention(nn.Module):
         o = o.transpose(0, 1)
 
         # average attention weights over heads
-        # return Z, attn_output_weights.sum(dim=1) / num_heads
         return o, self.zeros

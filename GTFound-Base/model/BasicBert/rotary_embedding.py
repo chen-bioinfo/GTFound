@@ -4,15 +4,12 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-# from BertEmbedding import BertEmbeddings
 
 def rotate_half(x):
     # rearrange doesn't work with torch.jit
-    # x = rearrange(x, '... (d r) -> ... d r', r=2)
     x = x.unflatten(dim=-1, sizes=(-1, 2))
     x1, x2 = x.unbind(dim=-1)
     rotated_x = torch.stack((-x2, x1), dim=-1)
-    # return rearrange(rotated_x, '... d r -> ... (d r)')
     return rotated_x.flatten(start_dim=-2)
 
 
@@ -31,7 +28,7 @@ class RotaryEmbedding(nn.Module):
     The rotary position embeddings from RoFormer_ (Su et. al).
     A crucial insight from the method is that the query and keys are
     transformed by rotation matrices which depend on the relative positions.
-    Other implementations are available in the Rotary Transformer repo_ and in 
+    Other implementations are available in the Rotary Transformer repo_ and in
     GPT-NeoX_, GPT-NeoX was an inspiration
     .. _RoFormer: https://arxiv.org/abs/2104.09864
     .. _repo: https://github.com/ZhuiyiTechnology/roformer
@@ -86,7 +83,6 @@ class RotaryEmbedding(nn.Module):
                 x.shape[seq_dimension], device=x.device, dtype=self.inv_freq.dtype
             )
             # Don't do einsum, it converts fp32 to fp16
-            # freqs = torch.einsum("i,j->ij", t, self.inv_freq)
             freqs = torch.outer(t, self.inv_freq)
             self._cos_cached = torch.cos(freqs).to(x.dtype)
             self._sin_cached = torch.sin(freqs).to(x.dtype)
@@ -324,7 +320,6 @@ class FourierCoordsEmbed(nn.Module):
 
         if linear:
             self.linear = nn.Linear(embedding_dim, embedding_dim, bias=False)
-        # self.linear.weight.data.zero_()
 
     def forward(self, x):
         if x is None:
@@ -379,7 +374,6 @@ class AngleEmbed(nn.Module):
     def __init__(self, in_dim, embedding_dim, bias=False):
         super(AngleEmbed, self).__init__()
         self.linear = nn.Linear(2 * in_dim, embedding_dim, bias=bias)
-        # self.linear.weight.data.zero_()
 
     def forward(self, x):
         if x is None:
@@ -392,28 +386,6 @@ class AngleEmbed(nn.Module):
         mask = torch.isnan(x)
         x = torch.where(mask, torch.zeros_like(x), x)
         return self.linear(x)
-# class config():
-#     def __init__(self):
-#         self.device = 'cpu'
-#         self.vocab_size = 6
-#         self.hidden_size = 768
-#         self.pad_token_id =3
-#         self.max_position_embeddings = 1024
-#         self.batch_size = 16
-#         self.initializer_range =0.2
-#         self.type_vocab_size =None
-#         self.all_possible_position = None
 
 
-
-# if __name__ == '__main__':
-#         x = torch.randint(0,2,[16,1024,768],dtype=torch.float64)
-#         y = torch.randint(0,2,[16,1024,768],dtype=torch.float64)
-#         print(x)
-#         rotary_embedding = RotaryEmbedding(dim_model=768,scale=768**0.5)
-#         # 使用位置编码
-#         # q, k = rotary_embedding(hidden_states,hidden_states)
 #         q,k = rotary_embedding(x,y)
-
-#         print(q.shape)
-#         print(k.shape)

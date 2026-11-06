@@ -12,13 +12,12 @@ class MyTransformer(nn.Module):
         super(MyTransformer, self).__init__()
 
 
-
-        #  ================ 编码部分 =====================
+        # Encoder
         encoder_layer = MyTransformerEncoderLayer(d_model, nhead, dim_feedforward, dropout)
         encoder_norm = nn.LayerNorm(d_model)
         self.encoder = MyTransformerEncoder(encoder_layer, num_encoder_layers, encoder_norm)
 
-        # ================ 解码部分 =====================
+        # Decoder
         decoder_layer = MyTransformerDecoderLayer(d_model, nhead, dim_feedforward, dropout)
         decoder_norm = nn.LayerNorm(d_model)
         self.decoder = MyTransformerDecoder(decoder_layer, num_decoder_layers, decoder_norm)
@@ -85,12 +84,11 @@ class MyTransformerEncoderLayer(nn.Module):
 
     def forward(self, src, src_mask=None, src_key_padding_mask=None):
 
-        # src2 = self.self_attn(src, src, src, attn_mask=src_mask,
-        #                       key_padding_mask=src_key_padding_mask, )[0]  # 计算多头注意力
+
         src2, attn_weight = self.self_attn(src, src, src, attn_mask=src_mask,
-                              key_padding_mask=src_key_padding_mask, )[0]  # 计算多头注意力
+                              key_padding_mask=src_key_padding_mask, )[0]  # Compute multi-head attention.
         # src2: [src_len,batch_size,num_heads*kdim] num_heads*kdim = embed_dim
-        src = src + self.dropout1(src2)  # 残差连接
+        src = src + self.dropout1(src2)  # Residual connection.
         src = self.norm1(src)  # [src_len,batch_size,num_heads*kdim]
 
         src2 = self.activation(self.linear1(src))  # [src_len,batch_size,dim_feedforward]
@@ -104,7 +102,7 @@ class MyTransformerEncoder(nn.Module):
     def __init__(self, encoder_layer, num_layers, norm=None):
         super(MyTransformerEncoder, self).__init__()
 
-        self.layers = _get_clones(encoder_layer, num_layers)  # 克隆得到多个encoder layers 论文中默认为6
+        self.layers = _get_clones(encoder_layer, num_layers)  # Clone the encoder layer to construct the stack.
         self.num_layers = num_layers
         self.norm = norm
 
@@ -113,7 +111,7 @@ class MyTransformerEncoder(nn.Module):
         output = src
         for mod in self.layers:
             output = mod(output, src_mask=mask,
-                         src_key_padding_mask=src_key_padding_mask)  # 多个encoder layers层堆叠后的前向传播过程
+                         src_key_padding_mask=src_key_padding_mask)  # Apply the stacked encoder layers.
         if self.norm is not None:
             output = self.norm(output)
         return output  # [src_len, batch_size, num_heads * kdim] <==> [src_len,batch_size,embed_dim]
@@ -149,22 +147,22 @@ class MyTransformerDecoderLayer(nn.Module):
         tgt2 = self.self_attn(tgt, tgt, tgt,  # [tgt_len,batch_size, embed_dim]
                               attn_mask=tgt_mask,
                               key_padding_mask=tgt_key_padding_mask)[0]
-        # 解码部分输入序列之间'的多头注意力（也就是论文结构图中的Masked Multi-head attention)
+        # Apply masked self-attention to decoder inputs.
 
-        tgt = tgt + self.dropout1(tgt2)  # 接着是残差连接
+        tgt = tgt + self.dropout1(tgt2)  # Apply the residual connection.
         tgt = self.norm1(tgt)  # [tgt_len,batch_size, embed_dim]
 
         tgt2 = self.multihead_attn(tgt, memory, memory,  # [tgt_len, batch_size, embed_dim]
                                    attn_mask=memory_mask,
                                    key_padding_mask=memory_key_padding_mask)[0]
 
-        # 解码部分的输入经过多头注意力后同编码部分的输出（memory）通过多头注意力机制进行交互
-        tgt = tgt + self.dropout2(tgt2)  # 残差连接
+        # Attend from decoder states to encoder memory.
+        tgt = tgt + self.dropout2(tgt2)  # Residual connection.
         tgt = self.norm2(tgt)  # [tgt_len, batch_size, embed_dim]
 
         tgt2 = self.activation(self.linear1(tgt))  # [tgt_len, batch_size, dim_feedforward]
         tgt2 = self.linear2(self.dropout(tgt2))  # [tgt_len, batch_size, embed_dim]
-        # 最后的两层全连接
+        # Apply the feed-forward layers.
         tgt = tgt + self.dropout3(tgt2)
         tgt = self.norm3(tgt)
         return tgt  # [tgt_len, batch_size, num_heads * kdim] <==> [tgt_len,batch_size,embed_dim]
@@ -182,7 +180,7 @@ class MyTransformerDecoder(nn.Module):
 
         output = tgt  # [tgt_len,batch_size, embed_dim]
 
-        for mod in self.layers:  # 这里的layers就是N层解码层堆叠起来的
+        for mod in self.layers:  # Iterate through the decoder stack.
             output = mod(output, memory,
                          tgt_mask=tgt_mask,
                          memory_mask=memory_mask,
@@ -200,23 +198,23 @@ class MyMultiheadAttention(nn.Module):
     def __init__(self, embed_dim, num_heads, dropout=0., bias=True):
         super(MyMultiheadAttention, self).__init__()
 
-        self.embed_dim = embed_dim  # 前面的d_model参数
-        self.head_dim = embed_dim // num_heads  # head_dim 指的就是d_k,d_v
+        self.embed_dim = embed_dim  # Model embedding dimension.
+        self.head_dim = embed_dim // num_heads  # Per-head query/key and value dimension.
         self.kdim = self.head_dim
         self.vdim = self.head_dim
 
-        self.num_heads = num_heads  # 多头个数
+        self.num_heads = num_heads  # Number of attention heads.
         self.dropout = dropout
 
-        assert self.head_dim * num_heads == self.embed_dim, "embed_dim 除以 num_heads必须为整数"
-        # 上面的限制条件就是论文中的  d_k = d_v = d_model/n_head 条件
+        assert self.head_dim * num_heads == self.embed_dim, "embed_dim must be divisible by num_heads"
+        # Require d_k = d_v = d_model / n_heads.
 
         self.q_proj = nn.Linear(embed_dim, embed_dim, bias=bias)  # embed_dim = kdim * num_heads
-        # 这里第二个维度之所以是embed_dim，实际上这里是同时初始化了num_heads个W_q堆叠起来的, 也就是num_heads个头
+        # Project all attention heads together in the embedding dimension.
         self.k_proj = nn.Linear(embed_dim, embed_dim, bias=bias)  # W_k,  embed_dim = kdim * num_heads
         self.v_proj = nn.Linear(embed_dim, embed_dim, bias=bias)  # W_v,  embed_dim = vdim * num_heads
         self.out_proj = nn.Linear(embed_dim, embed_dim, bias=bias)
-        # 最后将所有的Z组合起来的时候，也是一次性完成， embed_dim = vdim * num_heads
+        # Project the concatenated heads; embed_dim = value_dim * num_heads.
 
     def forward(self, query, key, value, attn_mask=None, key_padding_mask=None):
 
@@ -282,9 +280,9 @@ def multi_head_attention_forward(query,  # [tgt_len,batch_size, embed_dim]
 
     if key_padding_mask is not None:
         attn_output_weights = attn_output_weights.view(bsz, num_heads, tgt_len, src_len)
-        
+
         attn_output_weights = attn_output_weights.masked_fill(
-            key_padding_mask.unsqueeze(1).unsqueeze(2),  
+            key_padding_mask.unsqueeze(1).unsqueeze(2),
             float('-inf'))  #
         attn_output_weights = attn_output_weights.view(bsz * num_heads, tgt_len,
                                                        src_len)  # [batch_size * num_heads, tgt_len, src_len]
@@ -292,13 +290,12 @@ def multi_head_attention_forward(query,  # [tgt_len,batch_size, embed_dim]
     attn_output_weights = F.softmax(attn_output_weights, dim=-1)  # [batch_size * num_heads, tgt_len, src_len]
     attn_output_weights = F.dropout(attn_output_weights, p=dropout_p, training=training)
     attn_output = torch.bmm(attn_output_weights, v)
-    # Z = [batch_size * num_heads, tgt_len, src_len]  x  [batch_size * num_heads,src_len,vdim]
     # = # [batch_size * num_heads,tgt_len,vdim]
-    # 这就num_heads个Attention(Q,K,V)结果
+    # Concatenate outputs from all attention heads.
 
     attn_output = attn_output.transpose(0, 1).contiguous().view(tgt_len, bsz, embed_dim)
-    # 先transpose成 [tgt_len, batch_size* num_heads ,kdim]
-    # 再view成 [tgt_len,batch_size,num_heads*kdim]
+    # Transpose to [target_length, batch_size * num_heads, head_dim].
+    # Reshape to [target_length, batch_size, num_heads * head_dim].
     attn_output_weights = attn_output_weights.view(bsz, num_heads, tgt_len, src_len)
 
     Z = F.linear(attn_output, out_proj_weight, out_proj_bias)

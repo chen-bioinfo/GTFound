@@ -1,0 +1,35 @@
+# Python environments and generated caches.
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+
+# Local data, checkpoints, and experiment outputs.
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.npy
+*.npz
+*.vcf
+*.vcf.gz
+*.vcf.gz.tbi
+*.vcf.gz.csi
+*.bcf
+*.log
+data/
+cache/
+outputs/
+logs/
+runs/
+
+# Editor settings and local credentials.
+.env
+.env.*
+.DS_Store
+.vscode/
+.idea/

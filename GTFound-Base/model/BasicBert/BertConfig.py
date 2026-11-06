@@ -1,6 +1,5 @@
 import json
 import copy
-import six
 import logging
 
 
@@ -60,7 +59,7 @@ class BertConfig(object):
     def from_dict(cls, json_object):
         """Constructs a `BertConfig` from a Python dictionary of parameters."""
         config = BertConfig(vocab_size=None)
-        for (key, value) in six.iteritems(json_object):
+        for (key, value) in json_object.items():
             config.__dict__[key] = value
         return config
 
